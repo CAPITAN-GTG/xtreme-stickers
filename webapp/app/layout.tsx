@@ -3,6 +3,9 @@ import { Sedgwick_Ave_Display, Poppins } from "next/font/google";
 import "./globals.css";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { ClerkProvider } from '@clerk/nextjs';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const sedgwick = Sedgwick_Ave_Display({
   weight: "400",
@@ -27,14 +30,34 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${sedgwick.variable} ${poppins.variable} font-sedgwick antialiased`}>
-        <div className="flex flex-col min-h-screen">
-          <Navbar />
-          <main className="flex-grow">{children}</main>
-          <Footer />
-        </div>
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body className={`${sedgwick.variable} ${poppins.variable} font-sedgwick antialiased`}>
+          <div className="flex flex-col min-h-screen">
+            <Navbar />
+            <main className="flex-grow">{children}</main>
+            <Footer />
+          </div>
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="dark"
+            toastStyle={{
+              background: '#1f2937',
+              color: '#e5e7eb',
+              borderRadius: '0.5rem',
+              border: '1px solid rgba(147, 51, 234, 0.1)',
+            }}
+          />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

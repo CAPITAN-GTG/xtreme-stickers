@@ -9,13 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.15.1",
+    "@prisma/client": "^6.6.0",
     "@stripe/react-stripe-js": "^3.6.0",
     "@stripe/stripe-js": "^7.1.0",
+    "@types/mongoose": "^5.11.96",
+    "cloudinary": "^2.6.0",
     "lucide-react": "^0.488.0",
+    "mongodb": "^6.15.0",
+    "mongoose": "^8.13.2",
     "next": "15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-dropzone": "^14.3.8",
     "react-toastify": "^11.0.5",
     "stripe": "^18.0.0"
   },

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import connectToDatabase from '@/utils/connectDB';
+import Sticker from '@/models/Sticker';
+import { auth } from '@clerk/nextjs/server';
 
 // Check if STRIPE_SECRET_KEY is configured
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -12,35 +15,58 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function POST(request: Request) {
   try {
-    // Log the start of the request
-    console.log('Creating payment intent...');
+    // Get the user ID from Clerk
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please sign in." },
+        { status: 401 }
+      );
+    }
 
-    const { amount } = await request.json();
-    console.log('Received amount:', amount);
-
+    // Parse the request body
+    const { amount, items } = await request.json();
+    
     // Validate amount
     if (!amount || amount <= 0) {
-      console.log('Invalid amount:', amount);
       return NextResponse.json(
         { error: "Invalid amount. Amount must be greater than 0." },
         { status: 400 }
       );
     }
 
-    // Convert amount to cents (Stripe expects amounts in cents)
-    const amountInCents = Math.round(amount * 100);
-    console.log('Amount in cents:', amountInCents);
-
     // Create PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
+      amount: Math.round(amount * 100), // Convert to cents
       currency: "usd",
       automatic_payment_methods: {
         enabled: true,
       },
+      metadata: {
+        userId,
+      },
     });
 
-    console.log('Payment intent created successfully:', paymentIntent.id);
+    // Connect to MongoDB
+    await connectToDatabase();
+
+    // Only associate the payment intent ID with the stickers, don't change status yet
+    const updatePromises = items.map(async (item: any) => {
+      return Sticker.findOneAndUpdate(
+        { _id: item._id, userId },
+        { 
+          $set: { 
+            orderId: paymentIntent.id,
+            // Don't change status here - it will be changed after payment confirmation
+            paymentIntentId: paymentIntent.id,
+            updatedAt: new Date()
+          }
+        },
+        { new: true }
+      );
+    });
+
+    await Promise.all(updatePromises);
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,

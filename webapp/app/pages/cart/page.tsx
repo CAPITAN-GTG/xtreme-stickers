@@ -3,17 +3,19 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
-import { ToastContainer } from 'react-toastify';
+import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import CheckoutForm from '@/components/CheckoutForm';
+import { useUser } from '@clerk/nextjs';
+import { SignInButton } from '@clerk/nextjs';
 
 // Make sure to call loadStripe outside of a component's render to avoid
 // recreating the Stripe object on every render.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 interface CartItem {
-  id: string;
+  _id: string;
   imageUrl: string;
   size: {
     id: number;
@@ -22,6 +24,7 @@ interface CartItem {
   };
   quantity: number;
   total: number;
+  status: string;
 }
 
 // Define the appearance type correctly
@@ -37,33 +40,78 @@ const appearance = {
 } as const;
 
 const Cart = () => {
+  const { user, isLoaded: isUserLoaded } = useUser();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [clientSecret, setClientSecret] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Load cart items from localStorage
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      const items = JSON.parse(savedCart);
-      setCartItems(items);
-      // Calculate total
-      const total = items.reduce((sum: number, item: CartItem) => sum + item.total, 0);
-      setTotalAmount(total);
-    }
-  }, []);
+    const fetchCartItems = async () => {
+      if (!user) return;
 
-  const removeItem = (id: string) => {
-    const updatedCart = cartItems.filter(item => item.id !== id);
-    setCartItems(updatedCart);
-    localStorage.setItem('cart', JSON.stringify(updatedCart));
-    // Update total
-    const newTotal = updatedCart.reduce((sum, item) => sum + item.total, 0);
-    setTotalAmount(newTotal);
+      try {
+        const response = await fetch('/api/stickers');
+        if (!response.ok) {
+          throw new Error('Failed to fetch stickers');
+        }
+        const items = await response.json();
+        // Filter for draft items only
+        const draftItems = items.filter((item: CartItem) => item.status === 'draft');
+        setCartItems(draftItems);
+        // Calculate total
+        const total = draftItems.reduce((sum: number, item: CartItem) => sum + item.total, 0);
+        setTotalAmount(total);
+      } catch (error) {
+        console.error('Error fetching cart items:', error);
+        toast.error('Failed to load cart items');
+      }
+    };
+
+    fetchCartItems();
+  }, [user]);
+
+  const removeItem = async (id: string) => {
+    try {
+      const response = await fetch(`/api/stickers/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove item');
+      }
+
+      // Remove item from local state
+      const updatedCart = cartItems.filter(item => item._id !== id);
+      setCartItems(updatedCart);
+      
+      // Update total
+      const newTotal = updatedCart.reduce((sum, item) => sum + item.total, 0);
+      setTotalAmount(newTotal);
+
+      toast.success('Item removed from cart');
+    } catch (error) {
+      console.error('Error removing item:', error);
+      toast.error('Failed to remove item');
+    }
   };
 
   const handleCheckout = async () => {
+    if (!user) {
+      toast.error('Please sign in to proceed with checkout', {
+        position: "top-right",
+        autoClose: 3000,
+        theme: "dark",
+        style: {
+          background: '#1f2937',
+          color: '#e5e7eb',
+          borderRadius: '0.5rem',
+          border: '1px solid rgba(147, 51, 234, 0.1)',
+        },
+      });
+      return;
+    }
+
     try {
       setIsLoading(true);
 
@@ -72,13 +120,16 @@ const Cart = () => {
         throw new Error('Invalid cart amount');
       }
 
-      // Create payment intent
+      // Create payment intent and update stickers in MongoDB
       const response = await fetch('/api/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount: totalAmount }),
+        body: JSON.stringify({ 
+          amount: totalAmount,
+          items: cartItems,
+        }),
       });
 
       if (!response.ok) {
@@ -91,15 +142,48 @@ const Cart = () => {
 
     } catch (error: any) {
       console.error('Checkout error:', error);
-      alert(error.message || 'An error occurred during checkout. Please try again.');
+      toast.error(error.message || 'An error occurred during checkout. Please try again.', {
+        position: "top-right",
+        autoClose: 5000,
+        theme: "dark",
+        style: {
+          background: '#1f2937',
+          color: '#e5e7eb',
+          borderRadius: '0.5rem',
+          border: '1px solid rgba(147, 51, 234, 0.1)',
+        },
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const CheckoutButton = () => {
+    if (!isUserLoaded) return null;
+
+    if (!user) {
+      return (
+        <SignInButton mode="modal">
+          <button className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 rounded-md text-white font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-[1.02]">
+            Sign in to Checkout
+          </button>
+        </SignInButton>
+      );
+    }
+
+    return (
+      <button
+        onClick={handleCheckout}
+        disabled={isLoading}
+        className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 rounded-md text-white font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isLoading ? 'Processing...' : 'Proceed to Checkout'}
+      </button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
-      <ToastContainer />
       <div className="max-w-4xl mx-auto">
         <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden border border-purple-500/20">
           <div className="px-4 py-5 sm:p-6">
@@ -122,7 +206,7 @@ const Cart = () => {
                 <div className="space-y-4">
                   {cartItems.map((item) => (
                     <div
-                      key={item.id}
+                      key={item._id}
                       className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg bg-gray-700/50 border border-gray-600 hover:border-purple-500/30 transition-all duration-300"
                     >
                       {/* Image */}
@@ -151,7 +235,7 @@ const Cart = () => {
 
                       {/* Remove Button */}
                       <button
-                        onClick={() => removeItem(item.id)}
+                        onClick={() => removeItem(item._id)}
                         className="px-4 py-2 text-red-400 hover:text-red-300 transition-colors duration-300"
                       >
                         <svg
@@ -193,13 +277,7 @@ const Cart = () => {
                       >
                         Add More Stickers
                       </Link>
-                      <button
-                        onClick={handleCheckout}
-                        disabled={isLoading}
-                        className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-3 rounded-md text-white font-medium hover:from-purple-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isLoading ? 'Processing...' : 'Proceed to Checkout'}
-                      </button>
+                      <CheckoutButton />
                     </div>
                   )}
                 </div>
