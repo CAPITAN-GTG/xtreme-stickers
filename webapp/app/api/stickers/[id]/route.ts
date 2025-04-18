@@ -6,30 +6,19 @@ import { deleteImage } from '@/utils/cloudinary';
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    // Get and validate params
-    const resolvedParams = await Promise.resolve(params);
-    const id = resolvedParams.id;
-    if (!id) {
-      return NextResponse.json(
-        { error: "Missing sticker ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectToDatabase();
     const data = await request.json();
-    
+
     const sticker = await Sticker.findOneAndUpdate(
       { _id: id, userId },
       { $set: data },
@@ -37,10 +26,7 @@ export async function PATCH(
     );
 
     if (!sticker) {
-      return NextResponse.json(
-        { error: "Sticker not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Sticker not found" }, { status: 404 });
     }
 
     return NextResponse.json(sticker);
@@ -55,40 +41,28 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get and validate params
-    const resolvedParams = await Promise.resolve(params);
-    const id = resolvedParams.id;
+    const { id } = await params;
+
     if (!id) {
-      return NextResponse.json(
-        { error: "Missing sticker ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing sticker ID" }, { status: 400 });
     }
 
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectToDatabase();
-    
-    // Find the sticker first to get the imageUrl
+
     const sticker = await Sticker.findOne({ _id: id, userId });
 
     if (!sticker) {
-      return NextResponse.json(
-        { error: "Sticker not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Sticker not found" }, { status: 404 });
     }
 
-    // Delete the image from Cloudinary if URL exists
     let imageDeleted = false;
     if (sticker.imageUrl) {
       imageDeleted = await deleteImage(sticker.imageUrl);
@@ -97,10 +71,9 @@ export async function DELETE(
       }
     }
 
-    // Delete the sticker from MongoDB
     await Sticker.findOneAndDelete({ _id: id, userId });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: "Sticker deleted successfully",
       imageDeleted: imageDeleted
     });
@@ -111,4 +84,4 @@ export async function DELETE(
       { status: 500 }
     );
   }
-} 
+}
