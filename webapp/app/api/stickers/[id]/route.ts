@@ -6,7 +6,7 @@ import { deleteImage } from '@/utils/cloudinary';
 
 export async function PATCH(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     const { userId } = await auth();
@@ -18,8 +18,14 @@ export async function PATCH(
     }
 
     // Get and validate params
-    const params = await context.params;
-    const { id } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const id = resolvedParams.id;
+    if (!id) {
+      return NextResponse.json(
+        { error: "Missing sticker ID" },
+        { status: 400 }
+      );
+    }
 
     await connectToDatabase();
     const data = await request.json();
@@ -49,13 +55,12 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get and validate params
-    const params = await context.params;
-    const { id } = params;
-
+    const resolvedParams = await Promise.resolve(params);
+    const id = resolvedParams.id;
     if (!id) {
       return NextResponse.json(
         { error: "Missing sticker ID" },
