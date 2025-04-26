@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Package2, Clock, CheckCircle2, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 type OrderStatus = 'pending' | 'processing' | 'completed';
 
@@ -61,10 +62,11 @@ const Orders = () => {
   const { user, isLoaded: isUserLoaded } = useUser();
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const isAdmin = user?.id === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user) return;
+      if (!user || isAdmin) return; // Don't fetch if admin
 
       try {
         const response = await fetch('/api/stickers');
@@ -90,7 +92,7 @@ const Orders = () => {
     if (isUserLoaded) {
       fetchOrders();
     }
-  }, [user, isUserLoaded]);
+  }, [user, isUserLoaded, isAdmin]);
 
   // Show loading state while checking user authentication
   if (!isUserLoaded) {
@@ -110,6 +112,25 @@ const Orders = () => {
           Your Orders
         </h1>
         <p className="text-gray-300 text-center">Please sign in to view your orders</p>
+      </div>
+    );
+  }
+
+  // Show special message for admin
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center px-4">
+        <Package2 className="w-16 h-16 text-purple-500 mb-4" />
+        <h1 className="text-4xl font-sedgwick text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 text-center mb-4">
+          You're the admin silly!
+        </h1>
+        <p className="text-gray-300 text-center mb-8">You can't order things from yourself 😄</p>
+        <Link 
+          href="/pages/admin" 
+          className="px-6 py-3 bg-purple-600 hover:bg-purple-700 transition-colors duration-200 rounded-lg text-white font-medium shadow-lg hover:shadow-purple-500/20"
+        >
+          Go To Admin Page
+        </Link>
       </div>
     );
   }

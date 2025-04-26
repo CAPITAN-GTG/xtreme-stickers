@@ -10,30 +10,28 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-
-    const { userId } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const body = await request.json();
+    
     await connectToDatabase();
-    const data = await request.json();
-
-    const sticker = await Sticker.findOneAndUpdate(
-      { _id: id, userId },
-      { $set: data },
+    
+    const updatedSticker = await Sticker.findByIdAndUpdate(
+      id,
+      { $set: body },
       { new: true }
     );
 
-    if (!sticker) {
-      return NextResponse.json({ error: "Sticker not found" }, { status: 404 });
+    if (!updatedSticker) {
+      return NextResponse.json(
+        { error: 'Sticker not found' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(sticker);
-  } catch (error: any) {
+    return NextResponse.json(updatedSticker);
+  } catch (error) {
     console.error('Error updating sticker:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to update sticker' },
+      { error: 'Failed to update sticker' },
       { status: 500 }
     );
   }

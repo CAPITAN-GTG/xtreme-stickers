@@ -47,7 +47,12 @@ export async function GET() {
     }
 
     await connectToDatabase();
-    const stickers = await Sticker.find({ userId }).sort({ createdAt: -1 });
+    
+    // If user is admin, return all stickers, otherwise only return user's stickers
+    const isAdmin = userId === process.env.NEXT_PUBLIC_ADMIN_USER_ID;
+    const stickers = isAdmin 
+      ? await Sticker.find().sort({ createdAt: -1 })
+      : await Sticker.find({ userId }).sort({ createdAt: -1 });
 
     return NextResponse.json(stickers);
   } catch (error) {
